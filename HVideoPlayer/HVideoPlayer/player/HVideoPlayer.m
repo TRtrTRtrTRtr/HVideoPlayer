@@ -25,12 +25,16 @@
 @property(nonatomic,strong) UILabel  *totalTimeLable;
 @property(nonatomic,strong) UILabel  *currentTimeLable;
 
+//监听播放起状态的监听者
+@property (nonatomic ,strong) id playbackTimeObserver;
 
 @property(nonatomic,strong) UIView *contentView;
 
+@property(nonatomic,strong) NSDateFormatter *dateFormatter;
+
 @end
 
-
+static void *playcontext = @"playcontext";
 @implementation HVideoPlayer
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -48,8 +52,7 @@
 
 }
 -(void)addNotifion
-{
-    //旋转屏幕通知
+{    //旋转屏幕通知
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(onDeviceOrientationChange)
                                                  name:UIDeviceOrientationDidChangeNotification
@@ -113,6 +116,13 @@
     
     _totalTimeLable = [UILabel new];
     _currentTimeLable = [UILabel new];
+    
+    _totalTimeLable.textColor = [UIColor blackColor];
+    _currentTimeLable.textColor = [UIColor blackColor];
+    _totalTimeLable.font = [UIFont systemFontOfSize:12];
+    _currentTimeLable.font = [UIFont systemFontOfSize:12];
+    
+    
     
     [self addSubview:_contentView];
     
@@ -202,9 +212,66 @@
     self.currentPlayerLayer.frame = self.layer.bounds;
     self.currentPlayerLayer.videoGravity = AVLayerVideoGravityResizeAspect;
     [self.layer insertSublayer:_currentPlayerLayer atIndex:0];
-    
+    self.player.volume = .1;
     [self.player play];
     self.playORpuseButton.selected = YES;
+}
+
+-(void)setCurrentItem:(AVPlayerItem *)currentItem
+{
+    _currentItem = currentItem;
+    [_currentItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:playcontext];
+    [_currentItem addObserver:self forKeyPath:@"loadedTimeRanges" options:NSKeyValueObservingOptionNew context:playcontext];
+    [_currentItem addObserver:self forKeyPath:@"playbackBufferEmpty" options:NSKeyValueObservingOptionNew context:playcontext];
+    [_currentItem addObserver:self forKeyPath:@"playbackLikelyToKeepUp" options:NSKeyValueObservingOptionNew context:playcontext];
+    [self.player replaceCurrentItemWithPlayerItem:_currentItem];
+    
+    
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    if (context == playcontext) {
+        if([keyPath isEqualToString:@"status"])
+        {
+            AVPlayerStatus status = [[change objectForKey:NSKeyValueChangeNewKey] integerValue];
+
+            switch (status) {
+                case AVPlayerStatusUnknown:
+                    
+                    break;
+                case AVPlayerStatusReadyToPlay:{
+                    
+                    [self initTimer];
+                    }
+                    break;
+                
+                case AVPlayerStatusFailed:
+                    
+                    break;
+                    
+                default:
+                    break;
+            }
+        }
+       else if ([keyPath isEqualToString:@"loadedTimeRanges"])
+       {
+       
+       
+       }
+       else if ([keyPath isEqualToString:@"playbackBufferEmpty"])
+       {
+           
+           
+       }
+       else if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"])
+       {
+           
+           
+       }
+        
+        
+    }
 }
 //事件处理
 -(void)play
@@ -237,15 +304,73 @@
 -(void)dragClcik:(UISlider *)slider
 {
     NSLog(@"---12--%lf",slider.value);
-
 }
 
+
+-(void)initTimer{
+    double interval = .1f;
+    CMTime playerDuration = [self currentItemTotalTime];
+    if (CMTIME_IS_INVALID(playerDuration))
+    {
+        return;
+    }
+    long long nowTime = _currentItem.currentTime.value/_currentItem.currentTime.timescale;
+//    CGFloat width = CGRectGetWidth([self.progressSlider bounds]);
+//    interval = 0.5f * nowTime / width;
+    __weak typeof(self) weakSelf = self;
+    self.playbackTimeObserver =  [weakSelf.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC)  queue:dispatch_get_main_queue()                                                                          usingBlock:^(CMTime time){
+//        
+                CMTime time1 = [weakSelf currentItemTotalTime];
+            if(!CMTIME_IS_INVALID(time)){
+              long long nowtime = time1.value / time1.timescale;
+              self.totalTimeLable.text = [self convertTime:nowtime];
+                }
+      }];
+    
+}
+
+
+
+
+
+
+-(CMTime)currentItemTotalTime
+{
+    AVPlayerItem *playerItem = _currentItem;
+    if(playerItem.status == AVPlayerItemStatusReadyToPlay)
+    {
+        return ([playerItem duration]);
+    }
+    return (kCMTimeInvalid);
+
+}
+-(NSString *)convertTime:(float)seconds
+{
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:seconds];
+    if(seconds/3600 >= 1)
+    {
+        [[self dateFormatter] setDateFormat:@"HH:mm:ss"];
+    }else
+    {
+        [[self dateFormatter] setDateFormat:@"mm:ss"];
+    }
+    return [[self dateFormatter] stringFromDate:date];
+
+}
+-(NSDateFormatter *)dateFormatter
+{
+    if(_dateFormatter == nil)
+    {
+        _dateFormatter = [[NSDateFormatter alloc] init];
+        _dateFormatter.timeZone = [NSTimeZone timeZoneWithName:@"GMT"];
+    }
+    return _dateFormatter;
+
+}
 -(void)seekToTimeToPlay:(double)time
 {
     [self.player seekToTime:CMTimeMakeWithSeconds(time, _currentItem.currentTime.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
         
     }];
-
-
 }
 @end

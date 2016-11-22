@@ -34,6 +34,8 @@
     
     [view playerWithUrl:[NSURL URLWithString:@"http://wvideo.spriteapp.cn/video/2016/1121/02e48926-afe0-11e6-8931-d4ae5296039d_wpd.mp4"]];
     self.playerView = view;
+    static void *name = &name;
+    NSLog(@"%s",name);
     
     // Do any additional setup after loading the view, typically from a nib.
 }
