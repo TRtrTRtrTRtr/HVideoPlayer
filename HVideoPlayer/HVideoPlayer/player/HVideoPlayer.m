@@ -32,6 +32,9 @@
 
 @property(nonatomic,strong) NSDateFormatter *dateFormatter;
 
+
+@property(nonatomic,assign) BOOL isDragSlidr;
+
 @end
 
 static void *playcontext = @"playcontext";
@@ -104,18 +107,31 @@ static void *playcontext = @"playcontext";
     _topView = [UIView new];
     
     _bottomView = [UIView new];
+    _bottomView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
    
     
     _playORpuseButton  = [UIButton new];
+    [_playORpuseButton setImage:[UIImage imageNamed:@"icon_list_btn_play_small"] forState:UIControlStateSelected];
+    [_playORpuseButton setImage:[UIImage imageNamed:@"icon_list_btn_stop"] forState:UIControlStateNormal];
+    
+    
     _fullScreenButton  = [UIButton new];
+    [_fullScreenButton setImage:[UIImage imageNamed:@"icon_list_btn_fullscreen"] forState:UIControlStateNormal];
+     [_fullScreenButton setImage:[UIImage imageNamed:@"icon_list_btn_unfullscreen"] forState:UIControlStateNormal];
+    
     
     _sliderView = [UISlider new];
-    
+    _sliderView.minimumTrackTintColor = [UIColor greenColor];
+    _sliderView.maximumTrackTintColor = [UIColor grayColor];
+
     _sliderView.maximumValue = 1;
     _sliderView.minimumValue = 0;
-    
+   
     _totalTimeLable = [UILabel new];
     _currentTimeLable = [UILabel new];
+    
+    _totalTimeLable.textAlignment = NSTextAlignmentCenter;
+    _currentTimeLable.textAlignment = NSTextAlignmentCenter;
     
     _totalTimeLable.textColor = [UIColor blackColor];
     _currentTimeLable.textColor = [UIColor blackColor];
@@ -137,17 +153,18 @@ static void *playcontext = @"playcontext";
     
 //事件绑定
     [_playORpuseButton addTarget:self action:@selector(PlayOrPuse:) forControlEvents:UIControlEventTouchUpInside];
-    [_sliderView addTarget:self action:@selector(dragClcik:) forControlEvents:UIControlEventTouchUpInside];
+    [_sliderView addTarget:self action:@selector(dragedClcik:) forControlEvents:UIControlEventTouchUpInside];
+      [_sliderView addTarget:self action:@selector(dragingClcik:) forControlEvents:UIControlEventValueChanged];
     
     
     
 //调试背景颜色
-    _topView.backgroundColor = [UIColor redColor];
-    _bottomView.backgroundColor = [UIColor brownColor];
-    _playORpuseButton.backgroundColor = [UIColor greenColor];
-    _fullScreenButton.backgroundColor = [UIColor greenColor];
-    _totalTimeLable.backgroundColor = [UIColor grayColor];
-    _currentTimeLable.backgroundColor = [UIColor grayColor];
+//    _topView.backgroundColor = [UIColor redColor];
+//    _bottomView.backgroundColor = [UIColor brownColor];
+//    _playORpuseButton.backgroundColor = [UIColor greenColor];
+//    _fullScreenButton.backgroundColor = [UIColor greenColor];
+//    _totalTimeLable.backgroundColor = [UIColor grayColor];
+//    _currentTimeLable.backgroundColor = [UIColor grayColor];
     
     
     
@@ -219,6 +236,8 @@ static void *playcontext = @"playcontext";
 
 -(void)setCurrentItem:(AVPlayerItem *)currentItem
 {
+    
+    
     _currentItem = currentItem;
     [_currentItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:playcontext];
     [_currentItem addObserver:self forKeyPath:@"loadedTimeRanges" options:NSKeyValueObservingOptionNew context:playcontext];
@@ -238,16 +257,16 @@ static void *playcontext = @"playcontext";
 
             switch (status) {
                 case AVPlayerStatusUnknown:
-                    
+                    self.state = HPlayerStateBuffering;
                     break;
                 case AVPlayerStatusReadyToPlay:{
-                    
+                     self.state = HPlayerStateReadyToPlay;
                     [self initTimer];
                     }
                     break;
                 
                 case AVPlayerStatusFailed:
-                    
+                     self.state = HPlayerStateFailed;
                     break;
                     
                 default:
@@ -258,6 +277,7 @@ static void *playcontext = @"playcontext";
        {
        
        
+           
        }
        else if ([keyPath isEqualToString:@"playbackBufferEmpty"])
        {
@@ -267,7 +287,7 @@ static void *playcontext = @"playcontext";
        else if ([keyPath isEqualToString:@"playbackLikelyToKeepUp"])
        {
            
-           
+           NSLog(@"playbackLikelyToKeepUp");
        }
         
         
@@ -301,10 +321,26 @@ static void *playcontext = @"playcontext";
     }
 }
 
--(void)dragClcik:(UISlider *)slider
+-(void)dragedClcik:(UISlider *)slider
 {
-    NSLog(@"---12--%lf",slider.value);
+    self.isDragSlidr = NO;
+    double duration = CMTimeGetSeconds([self currentItemTotalTime]);
+    double time  = slider.value * duration;
+    [self seekToTimeToPlay:time];
+    
 }
+-(void)dragingClcik:(UISlider *)slider
+{
+    self.isDragSlidr = YES;
+}
+
+-(void)seekToTimeToPlay:(double)time
+{
+    [self.player seekToTime:CMTimeMakeWithSeconds(time, _currentItem.currentTime.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
+        
+    }];
+}
+
 
 
 -(void)initTimer{
@@ -315,23 +351,50 @@ static void *playcontext = @"playcontext";
         return;
     }
     long long nowTime = _currentItem.currentTime.value/_currentItem.currentTime.timescale;
+    
 //    CGFloat width = CGRectGetWidth([self.progressSlider bounds]);
 //    interval = 0.5f * nowTime / width;
+    self.sliderView.value = [self sliderProgress];
     __weak typeof(self) weakSelf = self;
+    
     self.playbackTimeObserver =  [weakSelf.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1.0, NSEC_PER_SEC)  queue:dispatch_get_main_queue()                                                                          usingBlock:^(CMTime time){
-//        
-                CMTime time1 = [weakSelf currentItemTotalTime];
-            if(!CMTIME_IS_INVALID(time)){
-              long long nowtime = time1.value / time1.timescale;
-              self.totalTimeLable.text = [self convertTime:nowtime];
-                }
-      }];
+        if(!self.isDragSlidr)
+        {
+            [weakSelf updateTimeLabel];
+        }
+    }];
     
 }
 
 
+-(void)updateTimeLabel
+{
+    CMTime totalCTime = [self currentItemTotalTime];
+    float Totaltime = totalCTime.value/totalCTime.timescale;
+    CMTime currentCTime = self.currentItem.currentTime;
+    float currenttime = currentCTime.value/currentCTime.timescale;
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+       
+        self.sliderView.value = currenttime/Totaltime;
+        NSLog(@"--%lf--%lf---%lf",Totaltime,currenttime,currenttime/Totaltime);
+        self.currentTimeLable.text = [self convertTime:currenttime];
+        self.totalTimeLable.text = [self convertTime:(Totaltime-currenttime)];
+        
+    });
+   
+}
+
+-(CGFloat)sliderProgress
+{
+    CMTime totalCTime = [self currentItemTotalTime];
+    long long Totaltime = totalCTime.value/totalCTime.timescale;
+    CMTime currentCTime = self.currentItem.currentTime;
+    long long currenttime = currentCTime.value/currentCTime.timescale;
+    return currenttime/Totaltime;
 
 
+}
 
 
 -(CMTime)currentItemTotalTime
@@ -350,12 +413,12 @@ static void *playcontext = @"playcontext";
     if(seconds/3600 >= 1)
     {
         [[self dateFormatter] setDateFormat:@"HH:mm:ss"];
+        
     }else
     {
         [[self dateFormatter] setDateFormat:@"mm:ss"];
     }
     return [[self dateFormatter] stringFromDate:date];
-
 }
 -(NSDateFormatter *)dateFormatter
 {
@@ -367,10 +430,5 @@ static void *playcontext = @"playcontext";
     return _dateFormatter;
 
 }
--(void)seekToTimeToPlay:(double)time
-{
-    [self.player seekToTime:CMTimeMakeWithSeconds(time, _currentItem.currentTime.timescale) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
-        
-    }];
-}
+
 @end

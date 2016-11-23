@@ -8,10 +8,22 @@
 
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+typedef NS_ENUM(NSInteger, HPlayerState)
+{
+     HPlayerStateFailed,
+     HPlayerStateBuffering,
+     HPlayerStateReadyToPlay,
+     HPlayerStatePlaying,
+     HPlayerStateStopped,
+     HPlayerStateFinished
+    
+};
+
+
 
 @interface HVideoPlayer : UIView
 -(void)playerWithUrl:(NSURL *)url;
 @property(nonatomic,strong) AVPlayerLayer *currentPlayerLayer;
-
+@property(nonatomic,assign) HPlayerState state;
 
 @end
